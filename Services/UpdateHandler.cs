@@ -1,3 +1,8 @@
+using BettingBot.Database;
+using BettingBot.Helpers;
+using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Threading;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
@@ -12,11 +17,13 @@ public class UpdateHandler : IUpdateHandler
 {
     private readonly ITelegramBotClient _botClient;
     private readonly ILogger<UpdateHandler> _logger;
+    private readonly BotContext _botContext;
 
-    public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger)
+    public UpdateHandler(ITelegramBotClient botClient, ILogger<UpdateHandler> logger, BotContext botContext)
     {
         _botClient = botClient;
         _logger = logger;
+        _botContext = botContext;
     }
 
     public async Task HandleUpdateAsync(ITelegramBotClient _, Update update, CancellationToken cancellationToken)
@@ -38,20 +45,69 @@ public class UpdateHandler : IUpdateHandler
 
     private async Task BotOnMessageReceived(Message message, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Receive message type: {MessageType}", message.Type);
-        if (message.Text is not { } messageText)
+        if (!MessageValidationHelper.ValidateIputMessage(message))
         {
             await _botClient.SendTextMessageAsync(
                 chatId: message.Chat.Id,
-                text: "НЕ OK",
+                text: "Ошибка сохранения. Неверный формат.",
                 cancellationToken: cancellationToken);
+            return;
         }
+        _logger.LogInformation("Receive message type: {MessageType}", message.Type);
 
-        await _botClient.SendTextMessageAsync(
-               chatId: message.Chat.Id,
-               text: "OK",
-               cancellationToken: cancellationToken);
+        var bet = InputMessageParser.ParseInputMessage(message.Text);
+
+        var result = await SaveBet(bet, message.Chat.Id);
+
+        if (result)
+        {
+            _logger.LogDebug("Успешное сохранение записи в файл и бд.");
+        }
     }
+
+    private async Task<bool> SaveBet(Bet bet, long chatId)
+    {
+        try
+        {
+            _botContext.Bets.Add(bet);
+            _botContext.BKs.AddRange(bet.Bks);
+            _botContext.SaveChanges();
+            SyncTable();
+            return true;
+        }
+        catch (IOException ex)
+        {
+            await _botClient.SendTextMessageAsync(
+               chatId: chatId,
+               text: "Файл в настоящее время открыт, изменения в файле появятся после следующего сообщения.");
+            return false;
+        }
+        catch (Exception ex) 
+        {
+            await _botClient.SendTextMessageAsync(
+               chatId: chatId,
+               text: $"Неизвестная ошибка: {ex.ToString()}");
+            return false;
+        }
+    }
+
+    private void SyncTable()
+    {
+        var bets = 
+            _botContext.Bets
+            .Include(b => b.Bks)
+            .ToList();
+        var stringBuilder = new StringBuilder();
+
+        stringBuilder.AppendLine("БК1;БК2;Спорт;Исход;Коэф;Команды");
+
+        foreach(var bet in bets)
+        {
+            stringBuilder.AppendLine($"{bet.Bks[0].Name};{bet.Bks[1].Name};{bet.Sport};{bet.Bks[0].Title};{bet.Bks[0].Coefficient};{bet.Title}");
+        }
+        System.IO.File.WriteAllText("Output.csv", stringBuilder.ToString(), Encoding.UTF8);
+    }
+
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
         var ErrorMessage = exception switch

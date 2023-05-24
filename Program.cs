@@ -1,21 +1,20 @@
 using BettingBot;
+using BettingBot.Database;
 using BettingBot.Services;
+using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
-using Telegram.Bot.Polling;
 using Telegram.Bot.Services;
 
 IHost host = Host.CreateDefaultBuilder(args)
+    .UseWindowsService(options =>
+    {
+        options.ServiceName = "Telegram betting bot service";
+    })
     .ConfigureServices((context, services) =>
     {
-        // Register Bot configuration
         services.Configure<BotConfiguration>(
             context.Configuration.GetSection(BotConfiguration.Configuration));
 
-        // Register named HttpClient to benefits from IHttpClientFactory
-        // and consume it with ITelegramBotClient typed client.
-        // More read:
-        //  https://docs.microsoft.com/en-us/aspnet/core/fundamentals/http-requests?view=aspnetcore-5.0#typed-clients
-        //  https://docs.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/use-httpclientfactory-to-implement-resilient-http-requests
         services.AddHttpClient("telegram_bot_client")
                 .AddTypedClient<ITelegramBotClient>((httpClient, sp) =>
                 {
@@ -27,19 +26,18 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddScoped<UpdateHandler>();
         services.AddScoped<ReceiverService>();
         services.AddHostedService<PollingService>();
+
+        services.AddDbContext<BotContext>(o =>
+        {
+            o.UseNpgsql();
+        },
+        ServiceLifetime.Transient);
+
     })
     .Build();
 
+using var serviceScope = host.Services.GetRequiredService<IServiceScopeFactory>().CreateScope();
+var userContext = serviceScope.ServiceProvider.GetRequiredService<BotContext>();
+userContext.Database.Migrate();
+
 await host.RunAsync();
-
-
-#pragma warning disable CA1050 // Declare types in namespaces
-#pragma warning disable RCS1110 // Declare type inside namespace.
-public class BotConfiguration
-#pragma warning restore RCS1110 // Declare type inside namespace.
-#pragma warning restore CA1050 // Declare types in namespaces
-{
-    public static readonly string Configuration = "BotConfiguration";
-
-    public string BotToken { get; set; } = null!;
-}
