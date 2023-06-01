@@ -3,4 +3,5 @@
 
 ТЗ - 
 
-<img width="583" alt="Обезличенное ТЗ" src="https://github.com/ufa3110/BettingBot_Dmitriy/assets/58032853/a84acec5-76a3-43d9-a760-50507cc4e98a">
+
+<img width="583" alt="Обезличенное ТЗ" src="https://github.com/ufa3110/BettingBot_Dmitriy/assets/58032853/f0d75fb9-6410-42e1-96a1-9055e83a1b5c">
