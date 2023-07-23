@@ -4,11 +4,48 @@ using BettingBot.Services;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using Telegram.Bot.Services;
+using CliWrap;
+
+const string ServiceName = "Telegram betting bot service";
+
+if (args is { Length: 1 })
+{
+    try
+    {
+        string executablePath =
+            Path.Combine(AppContext.BaseDirectory, "BettingBot.exe");
+
+        if (args[0] is "/Install")
+        {
+            await Cli.Wrap("sc")
+                .WithArguments(new[] { "create", ServiceName, $"binPath={executablePath}", "start=auto" })
+                .ExecuteAsync();
+        }
+        else if (args[0] is "/Uninstall")
+        {
+            await Cli.Wrap("sc")
+                .WithArguments(new[] { "stop", ServiceName })
+                .ExecuteAsync();
+
+            await Cli.Wrap("sc")
+                .WithArguments(new[] { "delete", ServiceName })
+                .ExecuteAsync();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex);
+    }
+
+    return;
+}
+
+
 
 IHost host = Host.CreateDefaultBuilder(args)
     .UseWindowsService(options =>
     {
-        options.ServiceName = "Telegram betting bot service";
+        options.ServiceName = ServiceName;
     })
     .ConfigureServices((context, services) =>
     {

@@ -15,10 +15,11 @@ namespace BettingBot.Helpers
 
             var sport = splittedString[1].Split(')').Last().Trim();
 
-            var BKs = new List<BK>();
-
-            BKs.Add(ParseBK(splittedString[3]));
-            BKs.Add(ParseBK(splittedString[4]));
+            var BKs = new List<BK>
+            {
+                ParseBK(splittedString[3]),
+                ParseBK(splittedString[4])
+            };
 
             return new Bet()
             {
